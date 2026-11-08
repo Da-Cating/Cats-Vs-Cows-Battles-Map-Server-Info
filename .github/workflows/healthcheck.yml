@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-    ping-server:
+  ping-server:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -16,12 +16,14 @@ jobs:
         id: check_tunnel
         run: |
           if [ ! -f "INFO.txt" ]; then
+            echo "Error: INFO.txt not found!"
             exit 1
           fi
           
           TARGET_URL=$(cat INFO.txt | tr -d '[:space:]')
-          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TARGET_URL" || echo "000")
+          echo "Checking URL: $TARGET_URL"
           
+          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TARGET_URL" || echo "000")
           echo "Response code: $RESPONSE_CODE"
           
           if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 400 ]; then
@@ -31,10 +33,10 @@ jobs:
             exit 1
           fi
 
-      - name: Send Discord Alert on Failure
+      - name: Send Phone Alert on Failure
         if: failure()
         uses: rjstone/discord-webhook-notify@v2
         with:
           severity: error
-          details: "@Da-Cating Server offline. fookin hell 🗣️🔥️"
+          details: "@Da-Cating Server offline dawg 💔️"
           webhookUrl: ${{ secrets.DihcordWebhook }}
