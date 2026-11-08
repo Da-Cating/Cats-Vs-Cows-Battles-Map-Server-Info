@@ -2,7 +2,7 @@ name: Server Health Check
 
 on:
   schedule:
-    - cron: '7/5 * * * *'
+    - cron: '*/20 * * * *'
   workflow_dispatch:
 
 jobs:
