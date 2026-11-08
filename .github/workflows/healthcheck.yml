@@ -12,79 +12,73 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Check Cloudflare Tunnel Uptime
-        id: check_tunnel
-        run: |
-          if [ ! -f "INFO.txt" ]; then
-            echo "Error: INFO.txt not found!"
-            echo "status=down" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          TARGET_URL=$(cat INFO.txt | tr -d '[:space:]')
-          TARGET_URL="${TARGET_URL}/ping"
-          echo "Checking URL: $TARGET_URL"
-          
-          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TARGET_URL" || echo "000")
-          echo "Response code: $RESPONSE_CODE"
-          
-          if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 400 ]; then
-            echo "Server is ONLINE!"
-            echo "status=up" >> $GITHUB_OUTPUT
-          else
-            echo "Server is OFFLINE!"
-            echo "status=down" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
       - name: Restore Previous Status
         id: cache_status
         uses: actions/cache@v4
         with:
           path: status.txt
-          key: server-status
+          key: server-status-${{ github.run_id }}
+          restore-keys: |
+            server-status-
 
-      - name: Evaluate State & Send Alert
+      - name: Check Cloudflare Tunnel Uptime
+        id: check_tunnel
+        run: |
+          if [ ! -f "INFO.txt" ]; then
+            echo "Error: INFO.txt not found!"
+            exit 1
+          fi
+          
+          TARGET_URL=$(cat INFO.txt | tr -d '[:space:]')
+          FULL_URL="${TARGET_URL}/ping"
+          echo "Checking URL: $FULL_URL"
+          
+          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --max-time 15 "$FULL_URL" || echo "000")
+          echo "Response code: $RESPONSE_CODE"
+          
+          if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 400 ]; then
+            echo "Server is ONLINE!"
+          else
+            echo "Server is OFFLINE!"
+            exit 1
+          fi
+
+      - name: Evaluate State & Decide Alert
+        id: state_check
         if: failure()
         run: |
-          # Read previous status if it exists
           PREV_STATUS="up"
           if [ -f "status.txt" ]; then
             PREV_STATUS=$(cat status.txt)
           fi
           
-          echo "Previous status was: $PREV_STATUS"
+          echo "Previous status: $PREV_STATUS"
+          echo "down" > status.txt
           
           if [ "$PREV_STATUS" = "down" ]; then
-            echo "Alert already sent previously. Suppressing notification."
-            exit 0 # Exit clean so discord step doesn't run
+            echo "Server was already down. Suppressing notification."
+            echo "send_alert=false" >> $GITHUB_OUTPUT
+          else
+            echo "First failure detected!"
+            echo "send_alert=true" >> $GITHUB_OUTPUT
           fi
-          
-          echo "down" > status.txt
-
-      - name: Save Down State Cache
-        if: failure()
-        uses: actions/cache/save@v4
-        with:
-          path: status.txt
-          key: server-status
 
       - name: Send Phone Alert on First Failure
-        if: failure() && steps.cache_status.outputs.cache-hit == 'true'
+        if: failure() && steps.state_check.outputs.send_alert == 'true'
         uses: rjstone/discord-webhook-notify@v2
         with:
           severity: error
           details: "@Da-Cating Server offline dawg 💔️"
           webhookUrl: ${{ secrets.DIHCORDWEBHOOK }}
 
-      - name: Reset State on Success
+      - name: Reset State File on Success
         if: success()
         run: |
           echo "up" > status.txt
 
-      - name: Save Up State Cache
-        if: success()
+      - name: Save Updated State Cache
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: status.txt
-          key: server-status
+          key: server-status-${{ github.run_id }}
