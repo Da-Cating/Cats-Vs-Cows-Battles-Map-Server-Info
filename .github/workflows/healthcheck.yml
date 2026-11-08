@@ -2,7 +2,7 @@ name: Server Health Check
 
 on:
   schedule:
-    - cron: '*/1 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -17,7 +17,8 @@ jobs:
         run: |
           if [ ! -f "INFO.txt" ]; then
             echo "Error: INFO.txt not found!"
-            exit 1
+            echo "status=down" >> $GITHUB_OUTPUT
+            exit 0
           fi
           
           TARGET_URL=$(cat INFO.txt | tr -d '[:space:]')
@@ -28,15 +29,61 @@ jobs:
           
           if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 400 ]; then
             echo "Server is ONLINE!"
+            echo "status=up" >> $GITHUB_OUTPUT
           else
             echo "Server is OFFLINE!"
+            echo "status=down" >> $GITHUB_OUTPUT
             exit 1
           fi
 
-      - name: Send Discord Alert on Failure
+      - name: Restore Previous Status
+        id: cache_status
+        uses: actions/cache@v4
+        with:
+          path: status.txt
+          key: server-status
+
+      - name: Evaluate State & Send Alert
         if: failure()
+        run: |
+          # Read previous status if it exists
+          PREV_STATUS="up"
+          if [ -f "status.txt" ]; then
+            PREV_STATUS=$(cat status.txt)
+          fi
+          
+          echo "Previous status was: $PREV_STATUS"
+          
+          if [ "$PREV_STATUS" = "down" ]; then
+            echo "Alert already sent previously. Suppressing notification."
+            exit 0 # Exit clean so discord step doesn't run
+          fi
+          
+          echo "down" > status.txt
+
+      - name: Save Down State Cache
+        if: failure()
+        uses: actions/cache/save@v4
+        with:
+          path: status.txt
+          key: server-status
+
+      - name: Send Phone Alert on First Failure
+        if: failure() && steps.cache_status.outputs.cache-hit == 'true'
         uses: rjstone/discord-webhook-notify@v2
         with:
           severity: error
           details: "@Da-Cating Server offline dawg 💔️"
           webhookUrl: ${{ secrets.DIHCORDWEBHOOK }}
+
+      - name: Reset State on Success
+        if: success()
+        run: |
+          echo "up" > status.txt
+
+      - name: Save Up State Cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: status.txt
+          key: server-status
