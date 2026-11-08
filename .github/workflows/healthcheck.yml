@@ -39,4 +39,4 @@ jobs:
         with:
           severity: error
           details: "@Da-Cating Server offline dawg 💔️"
-          webhookUrl: ${{ secrets.DihcordWebhook }}
+          webhookUrl: ${{ secrets.DIHCORDWEBHOOK }}
