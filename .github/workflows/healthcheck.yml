@@ -22,6 +22,7 @@ jobs:
           fi
           
           TARGET_URL=$(cat INFO.txt | tr -d '[:space:]')
+          TARGET_URL="${TARGET_URL}/ping"
           echo "Checking URL: $TARGET_URL"
           
           RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TARGET_URL" || echo "000")
