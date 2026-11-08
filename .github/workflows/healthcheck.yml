@@ -1,0 +1,34 @@
+name: Server Health Check
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo (to read the current URL)
+        uses: actions/checkout@v4
+
+      - name: Check Cloudflare Tunnel Uptime
+        run: |
+          if [ ! -f "INFO.txt" ]; then
+            echo "Error: INFO.txt not found!"
+            exit 1
+          fi
+          
+          TARGET_URL=$(cat INFO.txt | tr -d '[:space:]')
+          echo "Checking URL: $TARGET_URL"
+          
+          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TARGET_URL" || echo "000")
+          
+          echo "Response code: $RESPONSE_CODE"
+          
+          if [ "$RESPONSE_CODE" -ge 200 ] && [ "$RESPONSE_CODE" -lt 400 ]; then
+            echo "Server is online"
+          else
+            echo "Server is offline or unreachable (HTTP $RESPONSE_CODE)"
+            exit 1
+          fi
