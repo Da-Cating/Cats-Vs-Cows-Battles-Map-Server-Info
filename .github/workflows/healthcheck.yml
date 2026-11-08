@@ -33,7 +33,7 @@ jobs:
             exit 1
           fi
 
-      - name: Send Phone Alert on Failure
+      - name: Send Discord Alert on Failure
         if: failure()
         uses: rjstone/discord-webhook-notify@v2
         with:
